@@ -1,0 +1,7 @@
+fastapi
+httpx
+uvicorn
+httpx-curl-cffi
+flask
+colorama
+requests

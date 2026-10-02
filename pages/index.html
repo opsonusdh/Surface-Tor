@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#090909">
+	<title>Surface Tor | Index</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			color-scheme: dark;
+			--page: #090909;
+			--surface: #111111;
+			--surface-raised: #171717;
+			--text: #f2f2f2;
+			--muted: #999999;
+			--quiet: #666666;
+			--line: #303030;
+			--strong-line: #626262;
+			--button-bg: #f2f2f2;
+			--button-text: #090909;
+			--url: #65a5ff;
+			--mono: "IBM Plex Mono", "Courier New", monospace;
+			--sans: "Space Grotesk", "Arial", sans-serif;
+		}
+
+		html[data-theme="light"] {
+			color-scheme: light;
+			--page: #f5f5f5;
+			--surface: #ffffff;
+			--surface-raised: #ededed;
+			--text: #111111;
+			--muted: #555555;
+			--quiet: #777777;
+			--line: #d2d2d2;
+			--strong-line: #878787;
+			--button-bg: #111111;
+			--button-text: #ffffff;
+			--url: #075fd4;
+		}
+
+		* { box-sizing: border-box; }
+
+		body {
+			min-width: 320px;
+			min-height: 100vh;
+			margin: 0;
+			background: var(--page);
+			color: var(--text);
+			font-family: var(--sans);
+			transition: background-color 160ms ease, color 160ms ease;
+		}
+
+		button, input { font: inherit; }
+
+		.masthead {
+			height: 62px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 0 34px;
+			border-bottom: 1px solid var(--line);
+			font-family: var(--mono);
+			font-size: 11px;
+			letter-spacing: 1px;
+			text-transform: uppercase;
+		}
+
+		.brand { color: var(--text); text-decoration: none; }
+		.brand strong { font-weight: 600; }
+		.masthead-right { display: flex; align-items: center; gap: 26px; color: var(--muted); }
+
+		.theme-toggle {
+			min-height: 34px;
+			padding: 0 10px;
+			border: 1px solid var(--line);
+			border-radius: 0;
+			background: transparent;
+			color: var(--text);
+			cursor: pointer;
+			font-family: var(--mono);
+			font-size: 10px;
+			letter-spacing: .5px;
+			text-transform: uppercase;
+		}
+
+		.theme-toggle:hover { border-color: var(--strong-line); background: var(--surface); }
+		button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--strong-line); outline-offset: 3px; }
+
+		main { width: min(100% - 68px, 1050px); margin: 0 auto; }
+
+		.intro {
+			display: grid;
+			grid-template-columns: 110px 1fr;
+			gap: 28px;
+			padding: 78px 0 44px;
+			border-bottom: 1px solid var(--line);
+		}
+
+		.index-mark {
+			padding-top: 12px;
+			color: var(--quiet);
+			font-family: var(--mono);
+			font-size: 12px;
+			line-height: 1.8;
+		}
+
+		.eyebrow {
+			margin: 0 0 13px;
+			color: var(--muted);
+			font-family: var(--mono);
+			font-size: 11px;
+			letter-spacing: 1.4px;
+			text-transform: uppercase;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: 64px;
+			font-weight: 500;
+			line-height: .98;
+			letter-spacing: 0;
+		}
+
+		.intro-note {
+			max-width: 600px;
+			margin: 20px 0 0;
+			color: var(--muted);
+			font-family: var(--mono);
+			font-size: 12px;
+			line-height: 1.8;
+		}
+
+		.search-section { padding: 30px 0 25px; border-bottom: 1px solid var(--line); }
+
+		.search-label {
+			display: block;
+			margin-bottom: 11px;
+			color: var(--muted);
+			font-family: var(--mono);
+			font-size: 10px;
+			letter-spacing: 1px;
+			text-transform: uppercase;
+		}
+
+		.search-form { display: grid; grid-template-columns: 1fr 128px; gap: 10px; }
+
+		.search-input {
+			width: 100%;
+			height: 58px;
+			padding: 0 17px;
+			border: 1px solid var(--strong-line);
+			border-radius: 0;
+			background: var(--surface);
+			color: var(--text);
+			font-family: var(--mono);
+			font-size: 14px;
+		}
+
+		.search-input::placeholder { color: var(--quiet); opacity: 1; }
+
+		.search-button {
+			align-self: end;
+			height: 58px;
+			border: 1px solid var(--button-bg);
+			border-radius: 0;
+			background: var(--button-bg);
+			color: var(--button-text);
+			cursor: pointer;
+			font-family: var(--mono);
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: 1px;
+			text-transform: uppercase;
+		}
+
+		.search-button:hover { opacity: .82; }
+		.search-button:disabled { cursor: wait; opacity: .6; }
+
+		.search-meta {
+			display: flex;
+			justify-content: space-between;
+			gap: 16px;
+			min-height: 35px;
+			padding-top: 12px;
+			color: var(--quiet);
+			font-family: var(--mono);
+			font-size: 10px;
+			line-height: 1.6;
+			text-transform: uppercase;
+		}
+
+		#results { padding: 0 0 70px; }
+
+		.empty-state {
+			padding: 33px 0;
+			color: var(--muted);
+			font-family: var(--mono);
+			font-size: 12px;
+			line-height: 1.8;
+		}
+
+		.result-row {
+			display: grid;
+			grid-template-columns: 54px minmax(0, 1fr);
+			gap: 19px;
+			padding: 23px 0 25px;
+			border-bottom: 1px solid var(--line);
+			animation: appear 180ms ease both;
+		}
+
+		.result-number {
+			padding-top: 4px;
+			color: var(--quiet);
+			font-family: var(--mono);
+			font-size: 11px;
+		}
+
+		.result-name { margin: 0 0 8px; font-size: 22px; font-weight: 500; line-height: 1.25; }
+
+		.result-description {
+			max-width: 760px;
+			margin: 0 0 11px;
+			color: var(--muted);
+			font-size: 14px;
+			line-height: 1.65;
+			overflow-wrap: anywhere;
+		}
+
+		.result-url {
+			color: var(--url);
+			font-family: var(--mono);
+			font-size: 12px;
+			line-height: 1.7;
+			overflow-wrap: anywhere;
+			text-decoration: none;
+		}
+
+		.result-url:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+		footer {
+			display: flex;
+			justify-content: space-between;
+			gap: 20px;
+			padding: 17px 34px 20px;
+			border-top: 1px solid var(--line);
+			color: var(--quiet);
+			font-family: var(--mono);
+			font-size: 9px;
+			letter-spacing: .6px;
+			text-transform: uppercase;
+		}
+
+		@keyframes appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+		@media (max-width: 640px) {
+			.masthead { height: 56px; padding: 0 18px; }
+			.masthead-right { gap: 12px; }
+			.source-label { display: none; }
+			main { width: calc(100% - 36px); }
+			.intro { grid-template-columns: 1fr; gap: 10px; padding: 53px 0 32px; }
+			.index-mark { padding: 0; }
+			h1 { font-size: 46px; }
+			.intro-note { font-size: 11px; }
+			.search-form { grid-template-columns: 1fr 94px; gap: 7px; }
+			.search-input { height: 54px; padding: 0 12px; font-size: 12px; }
+			.search-button { height: 54px; font-size: 10px; }
+			.result-row { grid-template-columns: 32px minmax(0, 1fr); gap: 10px; padding: 20px 0; }
+			.result-name { font-size: 19px; }
+			.result-description { font-size: 13px; }
+			footer { padding-right: 18px; padding-left: 18px; font-size: 8px; }
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			*, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+		}
+	</style>
+</head>
+<body>
+	<header class="masthead">
+		<a class="brand" href="./"><strong>SURFACE</strong> / TOR</a>
+		<div class="masthead-right">
+			<span class="source-label">PUBLIC INDEX / LIVE</span>
+			<button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light theme">◐ <span id="theme-label">DARK</span></button>
+		</div>
+	</header>
+
+	<main>
+		<section class="intro" aria-labelledby="page-title">
+			<div class="index-mark">INDEX<br>NO. 001</div>
+			<div>
+				<p class="eyebrow">Surface Tor / Search</p>
+				<h1 id="page-title">The Index</h1>
+				<p class="intro-note">A live directory of routed sites. Search names, descriptions, and addresses.</p>
+			</div>
+		</section>
+
+		<section class="search-section" aria-label="Search the index">
+			<form class="search-form" id="search-form" role="search">
+				<div>
+					<label class="search-label" for="query">Search index</label>
+					<input class="search-input" id="query" name="q" type="search" placeholder="Name, description, or URL" autocomplete="off" spellcheck="false">
+				</div>
+				<button class="search-button" id="search-button" type="submit">Search</button>
+			</form>
+			<div class="search-meta">
+				<span id="result-count" aria-live="polite">Awaiting query</span>
+				<span id="source-status">Source: lookup.txt</span>
+			</div>
+		</section>
+
+		<section id="results" aria-label="Search results" aria-live="polite" aria-busy="false">
+			<div class="empty-state" id="empty-state">Enter a query to search the current index.</div>
+		</section>
+	</main>
+
+	<footer>
+		<span>Surface Tor</span>
+		<span>Index / Public Gist</span>
+	</footer>
+
+	<script>
+		(() => {
+			const GIST_FILENAME = "surface_tor.json";
+			const root = document.documentElement;
+			const form = document.getElementById("search-form");
+			const input = document.getElementById("query");
+			const button = document.getElementById("search-button");
+			const results = document.getElementById("results");
+			const count = document.getElementById("result-count");
+			const sourceStatus = document.getElementById("source-status");
+			const themeButton = document.getElementById("theme-toggle");
+			const themeLabel = document.getElementById("theme-label");
+
+			function setTheme(theme) {
+				root.dataset.theme = theme;
+				themeLabel.textContent = theme.toUpperCase();
+				themeButton.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} theme`);
+				document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#090909" : "#f5f5f5";
+				try { localStorage.setItem("surface-tor-theme", theme); } catch (_) { }
+			}
+
+			try {
+				const savedTheme = localStorage.getItem("surface-tor-theme");
+				if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+			} catch (_) { }
+
+			themeButton.addEventListener("click", () => {
+				setTheme(root.dataset.theme === "dark" ? "light" : "dark");
+			});
+
+			function displayMessage(message, queryStatus = "") {
+				results.replaceChildren();
+				const state = document.createElement("div");
+				state.className = "empty-state";
+				state.textContent = message;
+				results.append(state);
+				count.textContent = queryStatus;
+			}
+
+			function resolveGistId(lookupText) {
+				const match = lookupText.match(/https?:\/\/[^\s"'<>]+/i);
+				if (!match) throw new Error("lookup.txt does not contain a Gist URL.");
+				const gistUrl = new URL(match[0]);
+				const segments = gistUrl.pathname.split("/").filter(Boolean);
+				const rawIndex = segments.findIndex((segment) => segment.toLowerCase() === "raw");
+				const gistId = rawIndex > 0 ? segments[rawIndex - 1] : segments.find((segment) => /^[a-f0-9]{20,}$/i.test(segment));
+				if (!gistId || !/^[a-f0-9]{20,}$/i.test(gistId)) throw new Error("Could not find a valid Gist ID in lookup.txt.");
+				return gistId;
+			}
+
+			async function fetchCurrentRecords() {
+				const lookupResponse = await fetch(new URL("lookup.txt", document.baseURI), { cache: "no-store" });
+				if (!lookupResponse.ok) throw new Error(`Could not read lookup.txt (${lookupResponse.status}).`);
+				const gistId = resolveGistId(await lookupResponse.text());
+				const gistResponse = await fetch(`https://api.github.com/gists/${encodeURIComponent(gistId)}`, {
+					cache: "no-store",
+					headers: { Accept: "application/vnd.github+json" }
+				});
+				if (gistResponse.status === 403) throw new Error("GitHub is rate-limiting index requests. Try again shortly.");
+				if (!gistResponse.ok) throw new Error(`Could not read the public Gist (${gistResponse.status}).`);
+				const gist = await gistResponse.json();
+				const gistFile = gist.files && gist.files[GIST_FILENAME];
+				if (!gistFile) throw new Error(`${GIST_FILENAME} was not found in the configured Gist.`);
+
+				let data;
+				if (gistFile.truncated && gistFile.raw_url) {
+					const rawResponse = await fetch(gistFile.raw_url, { cache: "no-store" });
+					if (!rawResponse.ok) throw new Error(`Could not read the full index (${rawResponse.status}).`);
+					data = await rawResponse.json();
+				} else {
+					data = JSON.parse(gistFile.content);
+				}
+
+				const records = data && typeof data === "object" ? data.records : null;
+				if (!records || typeof records !== "object" || Array.isArray(records)) {
+					throw new Error("The Gist does not contain a records index.");
+				}
+				return Object.values(records).filter((record) => record && typeof record === "object" && typeof record.url === "string" && /^https?:\/\//i.test(record.url));
+			}
+
+			function normalized(value) {
+				return String(value || "").normalize("NFKD").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+			}
+
+			function scoreRecord(record, query) {
+				const terms = normalized(query).split(/\s+/).filter(Boolean);
+				if (!terms.length) return 0;
+				const name = normalized(record.name);
+				const description = normalized(record.desc);
+				const url = normalized(record.url);
+				let score = 0;
+				let matchedTerms = 0;
+
+				for (const term of terms) {
+					let termScore = 0;
+					if (name === term) termScore = 16;
+					else if (name.split(" ").some((word) => word.startsWith(term))) termScore = 12;
+					else if (name.includes(term)) termScore = 9;
+					if (description === term) termScore = Math.max(termScore, 7);
+					else if (description.includes(term)) termScore = Math.max(termScore, 5);
+					if (url.includes(term)) termScore = Math.max(termScore, 4);
+					if (termScore) matchedTerms++;
+					score += termScore;
+				}
+
+				if (matchedTerms === terms.length) score += 5;
+				const phrase = normalized(query);
+				if (phrase && name.includes(phrase)) score += 8;
+				else if (phrase && description.includes(phrase)) score += 3;
+				return matchedTerms ? score : 0;
+			}
+
+			function safeHttpUrl(value) {
+				try {
+					const url = new URL(value);
+					return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+				} catch (_) {
+					return null;
+				}
+			}
+
+			function renderResults(records, query) {
+				const ranked = records
+					.map((record) => ({ record, score: scoreRecord(record, query) }))
+					.filter((item) => item.score > 0)
+					.sort((a, b) => b.score - a.score || String(a.record.name || "").localeCompare(String(b.record.name || "")));
+
+				results.replaceChildren();
+				count.textContent = `${ranked.length} ${ranked.length === 1 ? "result" : "results"} / LIVE INDEX`;
+				sourceStatus.textContent = "Source: public Gist";
+
+				if (!ranked.length) {
+					displayMessage("No matching entries.", "0 results / LIVE INDEX");
+					sourceStatus.textContent = "Source: public Gist";
+					return;
+				}
+
+				const fragment = document.createDocumentFragment();
+				ranked.slice(0, 50).forEach(({ record }, index) => {
+					const row = document.createElement("article");
+					row.className = "result-row";
+					const number = document.createElement("div");
+					number.className = "result-number";
+					number.textContent = String(index + 1).padStart(2, "0");
+					const content = document.createElement("div");
+					const title = document.createElement("h2");
+					title.className = "result-name";
+					title.textContent = record.name || new URL(record.url).hostname;
+					content.append(title);
+
+					if (record.desc) {
+						const description = document.createElement("p");
+						description.className = "result-description";
+						description.textContent = record.desc;
+						content.append(description);
+					}
+
+					const href = safeHttpUrl(record.url);
+					if (href) {
+						const link = document.createElement("a");
+						link.className = "result-url";
+						link.href = href;
+						link.target = "_blank";
+						link.rel = "noopener noreferrer";
+						link.textContent = record.url;
+						content.append(link);
+					}
+
+					row.append(number, content);
+					fragment.append(row);
+				});
+				results.append(fragment);
+			}
+
+			form.addEventListener("submit", async (event) => {
+				event.preventDefault();
+				const query = input.value.trim();
+				if (!query) {
+					input.focus();
+					displayMessage("Enter a query to search the current index.", "Awaiting query");
+					return;
+				}
+
+				button.disabled = true;
+				button.textContent = "Searching";
+				results.setAttribute("aria-busy", "true");
+				displayMessage("Fetching the latest index from the public Gist…", "Searching / LIVE FETCH");
+				sourceStatus.textContent = "Source: lookup.txt → GitHub Gist";
+
+				try {
+					const records = await fetchCurrentRecords();
+					renderResults(records, query);
+				} catch (error) {
+					displayMessage(error instanceof Error ? error.message : "Search failed.", "Index unavailable");
+					sourceStatus.textContent = "Source: unavailable";
+				} finally {
+					results.setAttribute("aria-busy", "false");
+					button.disabled = false;
+					button.textContent = "Search";
+				}
+			});
+		})();
+	</script>
+</body>
+</html>
