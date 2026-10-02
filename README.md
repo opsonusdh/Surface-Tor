@@ -11,7 +11,7 @@ A reverse-proxy chain with Cloudflare Quick Tunnels and a tiny searchable direct
 3. Chains the nodes: each proxy after the first targets the preceding tunnel URL.
 4. Monitors the public URLs and attempts to recover unhealthy tunnels.
 5. Saves one searchable record per original site in `surface_tor.json` and, when configured, creates or updates a public GitHub Gist named `surface_tor.json`.
-6. Provides a static search template at `pages/index.html`. It reads the Gist ID from `pages/lookup.txt` and fetches current public Gist data when someone searches.
+6. Provides a static search template at [pages/index.html](https://opsonusdh.github.io/Surface-Tor/pages/). It reads the Gist ID from `pages/lookup.txt` and fetches current public Gist data when someone searches.
 
 The saved state looks roughly like this:
 
