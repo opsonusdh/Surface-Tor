@@ -51,7 +51,6 @@ echo "[SUCCESS] Standalone proxy daemon '$BINARY_NAME' deployed inside applicati
 
 
 echo "[*] Transitioning to local runtime environment configuration loop..."
-cd "$SCRIPT_DIR/Replica"
 
 if command -v pip3 >/dev/null 2>&1; then
     PIP_BIN="pip3"
@@ -63,7 +62,6 @@ else
 fi
 
 echo "[*] Triggering dependency installation layer using $PIP_BIN..."
-$PIP_BIN install --upgrade pip
 $PIP_BIN install -r requirements.txt
 
 echo "========================================================================="

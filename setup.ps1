@@ -27,16 +27,13 @@ Invoke-WebRequest -Uri $DownloadUrl -OutFile $DestinationPath
 
 Write-Host "[SUCCESS] Standalone proxy daemon '$BinaryName' deployed inside application workspace." 
 
-Write-Host "[*] Transitioning to local runtime environment configuration loop..." 
-Set-Location -Path "$PSScriptRoot\Replica"
+Write-Host "[*] Transitioning to local runtime environment configuration loop..."
 
 if (Get-Command "py" -ErrorAction SilentlyContinue) {
     Write-Host "[*] Triggering dependency installation layer using Python Launcher (py)..." 
-    py -m pip install --upgrade pip
     py -m pip install -r requirements.txt
 } elseif (Get-Command "python" -ErrorAction SilentlyContinue) {
     Write-Host "[*] Triggering dependency installation layer using Python..." 
-    python -m pip install --upgrade pip
     python -m pip install -r requirements.txt
 } else {
     Write-Warning "[WARNING] No systemic 'python' execution binary located. Please execute dependencies manually."
