@@ -63,7 +63,7 @@ def test_site_key_hashes_target_and_final_url(monkeypatch):
 
     assert key0 != key1
     assert len(key0) == 64
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Example title", "Example description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Example title", "Example description", "metadata", "metadata"))
     chain = [{"public_url": "https://a.example", "local_port": 8000, "target": "https://target.example", "origin_target": "https://target.example", "timestamp": "now"}]
     record, _ = main_module.serialize_tunnel_state(chain)
     site_key = main_module.make_site_key("https://target.example", "https://a.example")
@@ -126,7 +126,7 @@ def test_surface_state_reuses_existing_gist_id_and_filename(tmp_path, monkeypatc
 
     monkeypatch.setattr(main_module, "get_gist", fake_get)
     monkeypatch.setattr(main_module, "edit_gist", fake_edit)
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Target title", "Target description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Target title", "Target description", "metadata", "metadata"))
 
     loaded = main_module.load_local_state(state_path)
     chain = [{"local_port": 8000, "public_url": "https://b.example", "target": "https://target.example", "origin_target": "https://target.example", "timestamp": "now"}]
@@ -139,7 +139,11 @@ def test_surface_state_reuses_existing_gist_id_and_filename(tmp_path, monkeypatc
     assert "old-target-key" not in uploaded["records"]
     assert uploaded["records"][new_key] == {"name": "Target title", "desc": "Target description", "url": "https://b.example"}
     assert uploaded["records"]["other-site-key"] == remote_state["records"]["other-site-key"]
-    assert uploaded["target_index"]["https://target.example"] == new_key
+    # target_index maps origin URLs to record keys: local bookkeeping only, never published.
+    assert "target_index" not in uploaded
+    local = json.loads(state_path.read_text(encoding="utf-8"))
+    assert local["target_index"]["https://target.example"] == new_key
+    assert local["target_index"]["https://other.example"] == "other-site-key"
 
 
 def test_persist_tunnel_state_keeps_only_valid_public_urls(tmp_path, monkeypatch):
@@ -151,7 +155,7 @@ def test_persist_tunnel_state_keeps_only_valid_public_urls(tmp_path, monkeypatch
         {"local_port": 8003, "public_url": "https://stale.example", "target": "https://target.example", "timestamp": "stale", "healthy": False},
     ]
 
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Target title", "Target description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Target title", "Target description", "metadata", "metadata"))
     main_module.persist_tunnel_state(records, local_path=path, gist_token=None)
     saved = json.loads(path.read_text(encoding="utf-8"))
 
@@ -171,7 +175,7 @@ def test_persist_removes_legacy_chain_entries_but_keeps_other_sites(tmp_path, mo
         "other": {"name": "Other website", "desc": "keep this", "url": "https://other.example"},
     }
     path.write_text(json.dumps({"records": legacy_records}), encoding="utf-8")
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Example title", "Example description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Example title", "Example description", "metadata", "metadata"))
     chain = [
         {"local_port": 8000, "target": "https://example.com", "origin_target": "https://example.com", "public_url": "https://new-one.example"},
         {"local_port": 8001, "target": "https://new-one.example", "origin_target": "https://example.com", "public_url": "https://new-final.example"},
@@ -191,7 +195,7 @@ def test_private_gist_is_replaced_with_public_gist(tmp_path, monkeypatch):
     created = []
 
     monkeypatch.setattr(main_module, "get_gist", lambda token, gist_id: {"public": False, "files": {main_module.GIST_FILENAME: {"content": json.dumps(existing_state)}}})
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Example title", "Example description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Example title", "Example description", "metadata", "metadata"))
 
     def fake_create(token, description, file_name, content, public=False):
         created.append({"public": public, "content": json.loads(content)})
@@ -221,7 +225,7 @@ def test_persist_tunnel_state_saves_local_copy_even_when_gist_api_fails(tmp_path
         raise req_lib.HTTPError("401 Client Error: Unauthorized for url: https://api.github.com/gists")
 
     monkeypatch.setattr(main_module, "create_gist", fake_create)
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Title", "Desc", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Title", "Desc", "metadata", "metadata"))
 
     chain = [{"local_port": 8000, "target": "https://example.com", "origin_target": "https://example.com", "public_url": "https://final.example"}]
 
@@ -234,57 +238,134 @@ def test_persist_tunnel_state_saves_local_copy_even_when_gist_api_fails(tmp_path
     assert len(saved["records"]) == 1  # local records still saved
 
 
-def test_intermediate_recovery_rebinds_next_proxy_without_restarting_its_tunnel(monkeypatch):
-    stopped = []
-    replacement_proxy = object()
-    replacement_tunnel = object()
-    records = [
-        {"local_port": 8000, "public_url": "https://layer1.example", "proxy_proc": object(), "tunnel_proc": object()},
-        {"local_port": 8001, "public_url": "https://layer2.example", "proxy_proc": object(), "tunnel_proc": object(), "metrics_port": 18001},
-        {"local_port": 8002, "public_url": "https://layer3.example", "target": "https://layer2.example", "proxy_proc": object(), "tunnel_proc": object()},
-        {"local_port": 8003, "public_url": "https://layer4.example", "target": "https://layer3.example", "proxy_proc": object(), "tunnel_proc": object()},
-    ]
-    old_failing_tunnel = records[1]["tunnel_proc"]
-    old_next_proxy = records[2]["proxy_proc"]
-    old_next_tunnel = records[2]["tunnel_proc"]
-    old_last_proxy = records[3]["proxy_proc"]
-    old_last_tunnel = records[3]["tunnel_proc"]
+# ---------------------------------------------------------------------------
+# Recovery: fix whichever half of a layer actually failed
+# ---------------------------------------------------------------------------
 
-    monkeypatch.setattr(main_module, "stop_process", lambda proc: stopped.append(proc))
-    monkeypatch.setattr(main_module, "start_tunnel_for_port", lambda host, port, metrics_port, binary, proot_rootfs=None, **kwargs: (replacement_tunnel, "https://replacement-layer2.example"))
-    monkeypatch.setattr(main_module, "start_reverse_proxy", lambda host, port, target: replacement_proxy)
+def _chain(n=3, dead_proxy=(), dead_tunnel=()):
+    """n fake layers; layer i listens on 8000+i and publishes layer{i}.example."""
+    records = []
+    for i in range(n):
+        records.append({
+            "local_port": 8000 + i,
+            "metrics_port": 18000 + i,
+            "host": "127.0.0.1",
+            "public_url": f"https://layer{i}.example",
+            "target": "https://origin.example" if i == 0 else f"https://layer{i - 1}.example",
+            "proxy_proc": _FakeProc(alive=i not in dead_proxy),
+            "tunnel_proc": _FakeProc(alive=i not in dead_tunnel),
+        })
+    return records
+
+
+def _patch_recovery_world(monkeypatch, open_ports):
+    """Replace process/network side effects; record what recovery decides to do."""
+    calls = {"proxy": [], "tunnel": [], "stopped": []}
+
+    def fake_proxy(host, port, target, user_agent=None, impersonate=None):
+        calls["proxy"].append((port, target))
+        open_ports.add(port)  # a freshly started proxy starts listening
+        return _FakeProc()
+
+    def fake_tunnel(host, port, metrics_port, binary, protocol=None):
+        calls["tunnel"].append(port)
+        return _FakeProc(), f"https://new-{port}.example"
+
+    monkeypatch.setattr(main_module, "start_reverse_proxy", fake_proxy)
+    monkeypatch.setattr(main_module, "start_tunnel_for_port", fake_tunnel)
+    monkeypatch.setattr(main_module, "stop_process", lambda proc: calls["stopped"].append(proc))
+    monkeypatch.setattr(main_module, "_is_port_open", lambda host, port, timeout=3.0: port in open_ports)
+    return calls
+
+
+def test_recovery_restarts_only_a_dead_proxy_and_keeps_the_public_url(monkeypatch):
+    records = _chain(3, dead_proxy={1})
+    calls = _patch_recovery_world(monkeypatch, open_ports={8000, 8002})
+    old_tunnel = records[1]["tunnel_proc"]
 
     main_module.recover_tunnel_record(1, records, "127.0.0.1", "cloudflared")
 
-    assert records[1]["public_url"] == "https://replacement-layer2.example"
-    assert records[2]["target"] == "https://replacement-layer2.example"
-    assert records[2]["tunnel_proc"] is old_next_tunnel
-    assert records[3]["proxy_proc"] is old_last_proxy
-    assert records[3]["tunnel_proc"] is old_last_tunnel
-    assert stopped == [old_failing_tunnel, old_next_proxy]
+    assert calls["proxy"] == [(8001, "https://layer0.example")]   # same target as before
+    assert calls["tunnel"] == []                                   # no new Cloudflare tunnel
+    assert records[1]["public_url"] == "https://layer1.example"    # URL unchanged
+    assert records[1]["tunnel_proc"] is old_tunnel
+    assert main_module.tunnel_is_healthy(records[1]) is True
 
 
-def test_final_layer_recovery_restarts_proxy_and_tunnel(monkeypatch):
-    stopped = []
-    replacement_proxy = object()
-    replacement_tunnel = object()
-    records = [
-        {"local_port": 8000, "public_url": "https://layer1.example", "proxy_proc": object(), "tunnel_proc": object()},
-        {"local_port": 8001, "public_url": "https://layer2.example", "target": "https://layer1.example", "proxy_proc": object(), "tunnel_proc": object(), "metrics_port": 18001},
-    ]
-    final_record = records[-1]
-    old_proxy = final_record["proxy_proc"]
-    old_tunnel = final_record["tunnel_proc"]
-    monkeypatch.setattr(main_module, "stop_process", lambda proc: stopped.append(proc))
-    monkeypatch.setattr(main_module, "start_reverse_proxy", lambda host, port, target: replacement_proxy)
-    monkeypatch.setattr(main_module, "start_tunnel_for_port", lambda host, port, metrics_port, binary, proot_rootfs=None, **kwargs: (replacement_tunnel, "https://replacement-final.example"))
+def test_recovery_restarts_a_dead_tunnel_and_rebinds_only_the_next_layer(monkeypatch):
+    records = _chain(3, dead_tunnel={1})
+    calls = _patch_recovery_world(monkeypatch, open_ports={8000, 8001, 8002})
+    own_proxy = records[1]["proxy_proc"]
 
     main_module.recover_tunnel_record(1, records, "127.0.0.1", "cloudflared")
 
-    assert final_record["proxy_proc"] is replacement_proxy
-    assert final_record["tunnel_proc"] is replacement_tunnel
-    assert final_record["public_url"] == "https://replacement-final.example"
-    assert stopped[:2] == [old_tunnel, old_proxy]
+    assert calls["tunnel"] == [8001]
+    assert records[1]["public_url"] == "https://new-8001.example"
+    assert calls["proxy"] == [(8002, "https://new-8001.example")]  # only the downstream proxy is rebound
+    assert records[2]["target"] == "https://new-8001.example"
+    assert records[1]["proxy_proc"] is own_proxy                   # its own proxy was fine
+
+
+def test_recovery_of_the_final_layer_tunnel_has_nothing_downstream_to_rebind(monkeypatch):
+    records = _chain(3, dead_tunnel={2})
+    calls = _patch_recovery_world(monkeypatch, open_ports={8000, 8001, 8002})
+
+    main_module.recover_tunnel_record(2, records, "127.0.0.1", "cloudflared")
+
+    assert calls["tunnel"] == [8002]
+    assert calls["proxy"] == []
+    assert records[2]["public_url"] == "https://new-8002.example"
+
+
+def test_recovery_fixes_both_halves_when_both_died(monkeypatch):
+    records = _chain(3, dead_proxy={1}, dead_tunnel={1})
+    calls = _patch_recovery_world(monkeypatch, open_ports={8000, 8002})
+
+    main_module.recover_tunnel_record(1, records, "127.0.0.1", "cloudflared")
+
+    # proxy first (same target), then the tunnel, then the next layer is rebound to the new URL
+    assert calls["proxy"] == [(8001, "https://layer0.example"), (8002, "https://new-8001.example")]
+    assert calls["tunnel"] == [8001]
+
+
+def test_recovery_restarts_a_proxy_whose_port_stopped_answering(monkeypatch):
+    """Process object looks alive but nothing is listening (wedged): still restart it."""
+    records = _chain(2)
+    calls = _patch_recovery_world(monkeypatch, open_ports={8000})   # 8001 is closed
+
+    main_module.recover_tunnel_record(1, records, "127.0.0.1", "cloudflared")
+
+    assert calls["proxy"] == [(8001, "https://layer0.example")]
+    assert calls["tunnel"] == []
+
+
+def test_a_dead_proxy_does_not_cause_tunnel_churn_across_health_checks(monkeypatch):
+    """Regression: a dead intermediate proxy used to get its *tunnel* replaced
+    (new public URL) on every cycle forever while the proxy stayed dead."""
+    records = _chain(3, dead_proxy={1})
+    calls = _patch_recovery_world(monkeypatch, open_ports={8000, 8002})
+
+    for _ in range(5):
+        for index, record in enumerate(records):
+            if not main_module.tunnel_is_healthy(record):
+                main_module.recover_tunnel_record(index, records, "127.0.0.1", "cloudflared")
+
+    assert calls["tunnel"] == []
+    assert len(calls["proxy"]) == 1
+    assert all(main_module.tunnel_is_healthy(r) for r in records)
+
+
+def test_restarted_proxy_keeps_the_nodes_user_agent_settings(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(main_module, "stop_process", lambda proc: None)
+    monkeypatch.setattr(main_module, "start_reverse_proxy",
+                        lambda host, port, target, user_agent=None, impersonate=None: seen.update(
+                            port=port, target=target, user_agent=user_agent, impersonate=impersonate) or _FakeProc())
+    record = {"local_port": 8001, "proxy_proc": _FakeProc(alive=False), "user_agent": "CustomBot/1.0", "impersonate": "firefox"}
+
+    main_module.restart_proxy_record(record, "127.0.0.1", "https://upstream.example")
+
+    assert seen == {"port": 8001, "target": "https://upstream.example", "user_agent": "CustomBot/1.0", "impersonate": "firefox"}
 
 
 def test_save_json_writes_json_file(tmp_path):
@@ -423,7 +504,7 @@ def test_tunnel_is_healthy_502_from_upstream_is_still_healthy(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Tests for DNS/proot workaround
+# Tests for how cloudflared is launched
 # ---------------------------------------------------------------------------
 
 def test_start_tunnel_uses_resolve_probe_host_for_url(monkeypatch):
@@ -448,7 +529,7 @@ def test_start_tunnel_uses_resolve_probe_host_for_url(monkeypatch):
     monkeypatch.setattr(main_module, "_tunnel_stderr_logs", {})
 
     try:
-        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared", proot_rootfs=None)
+        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared")
         # The --url should use 127.0.0.1, not 0.0.0.0
         assert "http://127.0.0.1:8000" in captured["cmd"]
         assert "http://0.0.0.0:8000" not in " ".join(captured["cmd"])
@@ -456,73 +537,8 @@ def test_start_tunnel_uses_resolve_probe_host_for_url(monkeypatch):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def test_dns_resolution_broken_detects_missing_resolv_conf():
-    """_dns_resolution_broken should return True when /etc/resolv.conf is missing."""
-    result = main_module._dns_resolution_broken()
-    # On this system (Termux), /etc/resolv.conf is indeed missing
-    assert result is True
-
-
-def test_prepare_proot_rootfs_creates_resolv_conf(monkeypatch):
-    """prepare_proot_rootfs should create a rootfs with working DNS config."""
-    monkeypatch.setattr(main_module, "_proot_rootfs", None)
-    monkeypatch.setattr(main_module, "_dns_resolution_broken", lambda: True)
-    monkeypatch.setattr(main_module, "resolve_proot_path", lambda: "/fake/proot")
-
-    tmpdir = Path(tempfile.mkdtemp())
-    monkeypatch.setattr(main_module, "script_dir", tmpdir)
-
-    try:
-        rootfs = main_module.prepare_proot_rootfs()
-        assert rootfs is not None
-        resolv_conf = rootfs / "etc" / "resolv.conf"
-        assert resolv_conf.exists()
-        assert "nameserver" in resolv_conf.read_text()
-
-        # Should be cached (returns same rootfs)
-        rootfs2 = main_module.prepare_proot_rootfs()
-        assert rootfs2 == rootfs
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        main_module._proot_rootfs = None
-
-
-def test_prepare_proot_rootfs_returns_none_when_dns_works(monkeypatch):
-    """When /etc/resolv.conf exists, no proot rootfs is needed."""
-    monkeypatch.setattr(main_module, "_proot_rootfs", None)
-    monkeypatch.setattr(main_module, "_dns_resolution_broken", lambda: False)
-
-    result = main_module.prepare_proot_rootfs()
-    assert result is None
-
-
-def test_build_proot_prefix_includes_rootfs_and_bindings():
-    """_build_proot_prefix should include -r rootfs and necessary -b bindings."""
-    tmpdir = Path(tempfile.mkdtemp())
-    rootfs = tmpdir / "rootfs"
-    rootfs.mkdir()
-    script_dir_path = tmpdir / "project"
-    script_dir_path.mkdir()
-
-    monkeypatch_script_dir = script_dir_path
-
-    try:
-        prefix = main_module._build_proot_prefix(
-            "/usr/bin/proot", rootfs, str(script_dir_path / "cloudflared")
-        )
-
-        assert "/usr/bin/proot" in prefix[0]
-        assert "-r" in prefix
-        assert str(rootfs) in prefix
-        assert "-b" in prefix
-        assert "/dev" in prefix
-        assert "/proc" in prefix
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-
-
 # ---------------------------------------------------------------------------
-# Tests for process-group cleanup and stale-process handling
+# Tests for process-group cleanup
 # ---------------------------------------------------------------------------
 
 def test_start_tunnel_passes_protocol_to_command(monkeypatch):
@@ -546,8 +562,7 @@ def test_start_tunnel_passes_protocol_to_command(monkeypatch):
     monkeypatch.setattr(main_module, "_tunnel_stderr_logs", {})
 
     try:
-        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared",
-                                          proot_rootfs=None, protocol="h2mux")
+        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared", protocol="h2mux")
         assert "--protocol" in captured["cmd"]
         assert "h2mux" in captured["cmd"]
     finally:
@@ -569,8 +584,7 @@ def test_start_tunnel_no_protocol_by_default(monkeypatch):
     monkeypatch.setattr(main_module, "_tunnel_stderr_logs", {})
 
     try:
-        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared",
-                                          proot_rootfs=None)
+        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared")
         assert "--protocol" not in captured["cmd"]
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -594,15 +608,14 @@ def test_start_tunnel_uses_start_new_session(monkeypatch):
     monkeypatch.setattr(main_module, "_tunnel_stderr_logs", {})
 
     try:
-        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared",
-                                          proot_rootfs=None)
+        main_module.start_tunnel_for_port("0.0.0.0", 8000, 18000, "/fake/cloudflared")
         assert captured["kwargs"].get("start_new_session") is True
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def test_stop_process_kills_process_group(monkeypatch):
-    """stop_process should kill the entire process group (proot + children)."""
+    """stop_process should kill the entire process group (the process + any children)."""
     killpg_calls = []
 
     class FakeProc:
@@ -628,46 +641,6 @@ def test_stop_process_kills_process_group(monkeypatch):
     assert len(killpg_calls) > 0
     # First signal should be SIGTERM
     assert killpg_calls[0][1] == main_module.signal.SIGTERM
-
-
-def test_cleanup_stale_cloudflared_processes_kills_orphans(monkeypatch):
-    """cleanup_stale_cloudflared_processes should kill orphaned cloudflared tunnel processes."""
-    killed = []
-
-    def fake_run(*args, **kwargs):
-        class FakeResult:
-            stdout = "  99999 /data/data/com.termux/files/home/Surface-Tor/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:8100 --url http://127.0.0.1:8000\n"
-        return FakeResult()
-
-    monkeypatch.setattr(main_module.subprocess, "run", fake_run)
-    monkeypatch.setattr(main_module.os, "kill",
-                        lambda pid, sig: killed.append((pid, sig)))
-
-    result = main_module.cleanup_stale_cloudflared_processes()
-    assert result == 1
-    assert killed[0][0] == 99999
-    assert killed[0][1] == main_module.signal.SIGKILL
-
-
-def test_cleanup_stale_cloudflared_processes_ignores_unrelated(monkeypatch):
-    """cleanup should NOT kill processes that don't match the cloudflared tunnel pattern."""
-    killed = []
-
-    def fake_run(*args, **kwargs):
-        class FakeResult:
-            stdout = (
-                "  32252 runsv cloudflared\n"
-                "  99998 python3 some_other_script.py\n"
-            )
-        return FakeResult()
-
-    monkeypatch.setattr(main_module.subprocess, "run", fake_run)
-    monkeypatch.setattr(main_module.os, "kill",
-                        lambda pid, sig: killed.append((pid, sig)))
-
-    result = main_module.cleanup_stale_cloudflared_processes()
-    assert result == 0
-    assert len(killed) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -767,7 +740,7 @@ def test_start_tunnel_fallback_to_stderr_when_metrics_api_fails(monkeypatch, tmp
     monkeypatch.setattr(main_module.time, "sleep", lambda s: None)  # skip sleeps
 
     proc, url = main_module.start_tunnel_for_port(
-        "0.0.0.0", 8002, 18002, "/fake/cloudflared", proot_rootfs=None
+        "0.0.0.0", 8002, 18002, "/fake/cloudflared"
     )
 
     assert url is not None
@@ -781,7 +754,7 @@ def test_start_tunnel_fallback_to_stderr_when_metrics_api_fails(monkeypatch, tmp
 
 def test_serialize_tunnel_state_uses_fetched_name_and_desc_by_default(monkeypatch):
     """Without overrides, serialize_tunnel_state should use fetch_site_metadata."""
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
     records = [{"local_port": 8000, "public_url": "https://final.example", "target": "https://example.com", "origin_target": "https://example.com", "timestamp": "now"}]
     result, _ = main_module.serialize_tunnel_state(records)
     key = next(iter(result))
@@ -791,7 +764,7 @@ def test_serialize_tunnel_state_uses_fetched_name_and_desc_by_default(monkeypatc
 
 def test_serialize_tunnel_state_name_override_takes_priority(monkeypatch):
     """When name_override is provided, it replaces the fetched name."""
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
     records = [{"local_port": 8000, "public_url": "https://final.example", "target": "https://example.com", "origin_target": "https://example.com", "timestamp": "now"}]
     result, _ = main_module.serialize_tunnel_state(records, name_override="My Custom Name")
     key = next(iter(result))
@@ -801,7 +774,7 @@ def test_serialize_tunnel_state_name_override_takes_priority(monkeypatch):
 
 def test_serialize_tunnel_state_desc_override_takes_priority(monkeypatch):
     """When desc_override is provided, it replaces the fetched description."""
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
     records = [{"local_port": 8000, "public_url": "https://final.example", "target": "https://example.com", "origin_target": "https://example.com", "timestamp": "now"}]
     result, _ = main_module.serialize_tunnel_state(records, desc_override="My Custom Desc")
     key = next(iter(result))
@@ -811,7 +784,7 @@ def test_serialize_tunnel_state_desc_override_takes_priority(monkeypatch):
 
 def test_serialize_tunnel_state_both_overrides(monkeypatch):
     """Both name and desc overrides should be used together."""
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Fetched Title", "Fetched Description", "metadata", "metadata"))
     records = [{"local_port": 8000, "public_url": "https://final.example", "target": "https://example.com", "origin_target": "https://example.com", "timestamp": "now"}]
     result, _ = main_module.serialize_tunnel_state(records, name_override="Custom", desc_override="Desc")
     key = next(iter(result))
@@ -822,14 +795,14 @@ def test_serialize_tunnel_state_both_overrides(monkeypatch):
 def test_persist_tunnel_state_passes_overrides_to_serialize(monkeypatch, tmp_path):
     """persist_tunnel_state should pass name_override/desc_override through to serialize_tunnel_state."""
     path = tmp_path / main_module.GIST_FILENAME
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Fetched", "Desc", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Fetched", "Desc", "metadata", "metadata"))
 
     serialize_calls = []
     original_serialize = main_module.serialize_tunnel_state
 
-    def tracking_serialize(records, name_override=None, desc_override=None):
+    def tracking_serialize(records, name_override=None, desc_override=None, user_agent=None):
         serialize_calls.append({"name_override": name_override, "desc_override": desc_override})
-        return original_serialize(records, name_override=name_override, desc_override=desc_override)
+        return original_serialize(records, name_override=name_override, desc_override=desc_override, user_agent=user_agent)
 
     monkeypatch.setattr(main_module, "serialize_tunnel_state", tracking_serialize)
     chain = [{"local_port": 8000, "target": "https://example.com", "origin_target": "https://example.com", "public_url": "https://final.example"}]
@@ -843,14 +816,14 @@ def test_persist_tunnel_state_passes_overrides_to_serialize(monkeypatch, tmp_pat
 def test_persist_tunnel_state_no_overrides_passes_none(monkeypatch, tmp_path):
     """Without overrides, persist_tunnel_state should pass None (meaning: fetch from URL)."""
     path = tmp_path / main_module.GIST_FILENAME
-    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target: ("Fetched", "Desc", "metadata", "metadata"))
+    monkeypatch.setattr(main_module, "fetch_site_metadata", lambda target, user_agent=None: ("Fetched", "Desc", "metadata", "metadata"))
 
     serialize_calls = []
     original_serialize = main_module.serialize_tunnel_state
 
-    def tracking_serialize(records, name_override=None, desc_override=None):
+    def tracking_serialize(records, name_override=None, desc_override=None, user_agent=None):
         serialize_calls.append({"name_override": name_override, "desc_override": desc_override})
-        return original_serialize(records, name_override=name_override, desc_override=desc_override)
+        return original_serialize(records, name_override=name_override, desc_override=desc_override, user_agent=user_agent)
 
     monkeypatch.setattr(main_module, "serialize_tunnel_state", tracking_serialize)
     chain = [{"local_port": 8000, "target": "https://example.com", "origin_target": "https://example.com", "public_url": "https://final.example"}]
@@ -940,7 +913,7 @@ def test_fetch_site_metadata_returns_domain_and_unavailable_on_network_error(mon
 def test_serialize_tunnel_state_reports_user_source_for_name_override(monkeypatch):
     """When name_override is provided, name_source in source_info should be 'user'."""
     monkeypatch.setattr(main_module, "fetch_site_metadata",
-                        lambda target: ("Fetched", "", "metadata", "unavailable"))
+                        lambda target, user_agent=None: ("Fetched", "", "metadata", "unavailable"))
     records = [{"local_port": 8000, "public_url": "https://final.example",
                 "target": "https://example.com", "origin_target": "https://example.com", "timestamp": "now"}]
     record, source_info = main_module.serialize_tunnel_state(records, name_override="Custom Name")
@@ -956,7 +929,7 @@ def test_serialize_tunnel_state_reports_user_source_for_name_override(monkeypatc
 def test_serialize_tunnel_state_reports_user_source_for_desc_override(monkeypatch):
     """When desc_override is provided, desc_source in source_info should be 'user'."""
     monkeypatch.setattr(main_module, "fetch_site_metadata",
-                        lambda target: ("Fetched", "", "metadata", "unavailable"))
+                        lambda target, user_agent=None: ("Fetched", "", "metadata", "unavailable"))
     records = [{"local_port": 8000, "public_url": "https://final.example",
                 "target": "https://example.com", "origin_target": "https://example.com", "timestamp": "now"}]
     record, source_info = main_module.serialize_tunnel_state(records, desc_override="Custom Desc")
@@ -971,7 +944,7 @@ def test_persist_tunnel_state_returns_source_info(tmp_path, monkeypatch):
     carries the resolved name, description, and their provenance."""
     path = tmp_path / main_module.GIST_FILENAME
     monkeypatch.setattr(main_module, "fetch_site_metadata",
-                        lambda target: ("My Site", "My description", "metadata", "metadata"))
+                        lambda target, user_agent=None: ("My Site", "My description", "metadata", "metadata"))
     chain = [{"local_port": 8000, "target": "https://example.com",
               "origin_target": "https://example.com", "public_url": "https://final.example"}]
 
